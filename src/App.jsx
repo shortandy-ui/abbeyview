@@ -857,6 +857,7 @@ function AdminView({
                           type="number"
                           step="0.1"
                           value={m.handicapIndex ?? ""}
+                          onFocus={(e) => e.target.select()}
                           onChange={(e) => {
                             const raw = e.target.value === "" ? null : Number(e.target.value);
                             updateDraftMember(m.id, "handicapIndex", raw);
@@ -868,6 +869,7 @@ function AdminView({
                         <input
                           type="number"
                           value={m.compCredit}
+                          onFocus={(e) => e.target.select()}
                           onChange={(e) => updateDraftMember(m.id, "compCredit", Number(e.target.value))}
                         />
                       </td>
@@ -875,6 +877,7 @@ function AdminView({
                         <input
                           type="number"
                           value={m.compsPlayed}
+                          onFocus={(e) => e.target.select()}
                           onChange={(e) => updateDraftMember(m.id, "compsPlayed", Number(e.target.value))}
                         />
                       </td>
@@ -882,6 +885,7 @@ function AdminView({
                         <input
                           type="number"
                           value={m.points}
+                          onFocus={(e) => e.target.select()}
                           onChange={(e) => updateDraftMember(m.id, "points", Number(e.target.value))}
                         />
                       </td>
@@ -1371,11 +1375,4 @@ function Styles() {
           width: auto;
           padding: 0;
         }
-        .print-week-grid { flex-direction: row; }
-        .print-week-col th, .print-week-col td { padding: 3px 4px; font-size: 10.5px; }
-        .print-week-col .print-time { width: 40px; }
-        .print-week-col h2 { font-size: 14px; }
-      }
-    `}</style>
-  );
-}
+        .print-week-grid 
