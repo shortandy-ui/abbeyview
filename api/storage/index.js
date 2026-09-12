@@ -1,6 +1,6 @@
 const { BlobServiceClient } = require("@azure/storage-blob");
 
-const CONTAINER_NAME = "app-data";
+const CONTAINER_NAME = "abbeyview-golf-data";
 
 // The storage account connection string. Set this as an Application
 // Setting in the Azure Static Web App (or its linked Function App)
