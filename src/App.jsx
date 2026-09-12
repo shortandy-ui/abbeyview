@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useMemo } from "react";
+rt React, { useState, useEffect, useCallback, useMemo } from "react";
 
 /* ---------------------------------------------------------------
    Abbeyview Golf Society
@@ -1375,4 +1375,11 @@ function Styles() {
           width: auto;
           padding: 0;
         }
-        .print-week-grid 
+        .print-week-grid { flex-direction: row; }
+        .print-week-col th, .print-week-col td { padding: 3px 4px; font-size: 10.5px; }
+        .print-week-col .print-time { width: 40px; }
+        .print-week-col h2 { font-size: 14px; }
+      }
+    `}</style>
+  );
+}
