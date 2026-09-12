@@ -119,18 +119,31 @@ function fmtHandicap(m) {
   return `${Math.round(m.handicapIndex)} (${m.handicapIndex.toFixed(1)})`;
 }
 
+// Talks to the Azure Function API (see /api/storage) which reads/writes
+// JSON blobs in Azure Blob Storage. Falls back gracefully if the API
+// is unreachable (e.g. while developing with `npm run dev` and no API
+// running) so the app still loads with in-memory defaults.
+const API_BASE = "/api/storage";
+
 async function storageGet(key) {
   try {
-    const r = await window.storage.get(key, true);
-    return r ? JSON.parse(r.value) : null;
+    const res = await fetch(`${API_BASE}/${encodeURIComponent(key)}`);
+    if (res.status === 404) return null;
+    if (!res.ok) return null;
+    return await res.json();
   } catch (e) {
     return null;
   }
 }
+
 async function storageSet(key, value) {
   try {
-    await window.storage.set(key, JSON.stringify(value), true);
-    return true;
+    const res = await fetch(`${API_BASE}/${encodeURIComponent(key)}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(value),
+    });
+    return res.ok;
   } catch (e) {
     return false;
   }
@@ -1241,7 +1254,7 @@ function Styles() {
       .goy-col ol { padding-left: 22px; margin: 0; }
       .goy-col li { display: flex; justify-content: space-between; padding: 6px 0; border-bottom: 1px solid var(--line); }
       .goy-points { font-weight: 700; color: var(--green-dark); }
-      .goy-empty { list-style: none; color: #8a8368; padding-left: -22px; }
+      .goy-empty { list-style: none; color: #8a8368; }
       @media (max-width: 560px) {
         .goy-grid { grid-template-columns: 1fr; }
         .tee-slots { grid-template-columns: repeat(2, 1fr); }
