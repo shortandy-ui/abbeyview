@@ -1167,13 +1167,13 @@ function BulkUpdateTool({ onApply }) {
 
       if (field === "handicapIndex") {
         const t1 = tokens[i];
-        const t2 = tokens[i + 1];
         let handicapIndex = null;
         if (t1 === "#") {
-          i += 2; // "# X" placeholder for no handicap
-        } else if (t1 !== undefined && /^-?\d+$/.test(t1) && t2 !== undefined && /^-?\d+(\.\d+)?$/.test(t2)) {
-          handicapIndex = Number(t2);
-          i += 2;
+          i += 1;
+          if (tokens[i] === "X") i += 1; // tolerate an old-style "# X" placeholder too
+        } else if (t1 !== undefined && /^-?\d+(\.\d+)?$/.test(t1)) {
+          handicapIndex = Number(t1);
+          i += 1;
         }
         entries.push({ firstname, surname, handicapIndex });
       } else {
@@ -1213,14 +1213,14 @@ function BulkUpdateTool({ onApply }) {
     <div className="account-section">
       <h3>Bulk update from a pasted list</h3>
       <p className="hint" style={{ marginTop: 0 }}>
-        Paste a list like "Firstname Surname 8" (one number) or "Surname Firstname 8 8.4" (handicap + index),
+        Paste a list like "Firstname Surname 8" or "Surname Firstname 8.4" — one number per name,
         repeated across the page — the same format as the club's usual handicap/comps sheets. Names are matched
         to the existing member list; anything that doesn't match is listed below so you can fix it by hand.
       </p>
       <label>
         Which field to update
         <select value={field} onChange={(e) => setField(e.target.value)}>
-          <option value="handicapIndex">Handicap index (expects two numbers per name)</option>
+          <option value="handicapIndex">Handicap index (one decimal number per name)</option>
           <option value="compsPlayed">Comps played (one number per name)</option>
           <option value="compCredit">Comp credit (one number per name)</option>
         </select>
