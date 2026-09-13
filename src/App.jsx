@@ -156,6 +156,8 @@ export default function App() {
   const [teesheets, setTeesheets] = useState({}); // { [date]: { time: [4] } }
   const [selectedDate, setSelectedDate] = useState(nextPlayDate());
   const [adminPassword, setAdminPassword] = useState(DEFAULT_ADMIN_PASSWORD);
+  const [clubNotice, setClubNotice] = useState("");
+  const [noticeDraft, setNoticeDraft] = useState("");
 
   const [view, setView] = useState("tee"); // tee | members | golfer | admin
   const [isAdmin, setIsAdmin] = useState(false);
@@ -169,23 +171,28 @@ export default function App() {
 
   useEffect(() => {
     (async () => {
-      const [m, comps, sheets, pw] = await Promise.all([
+      const [m, comps, sheets, pw, notice] = await Promise.all([
         storageGet("members"),
         storageGet("competitions"),
         storageGet("teesheets"),
         storageGet("adminPassword"),
+        storageGet("clubNotice"),
       ]);
       const finalMembers = m || DEFAULT_MEMBERS;
       const finalComps = comps || {};
       const finalSheets = sheets || {};
+      const finalNotice = notice || "";
       setMembers(finalMembers);
       setCompetitions(finalComps);
       setTeesheets(finalSheets);
       setAdminPassword(pw || DEFAULT_ADMIN_PASSWORD);
+      setClubNotice(finalNotice);
+      setNoticeDraft(finalNotice);
       if (!m) storageSet("members", finalMembers);
       if (!comps) storageSet("competitions", finalComps);
       if (!sheets) storageSet("teesheets", finalSheets);
       if (!pw) storageSet("adminPassword", DEFAULT_ADMIN_PASSWORD);
+      if (notice === null) storageSet("clubNotice", finalNotice);
       const startDate = nextPlayDate();
       setSelectedDate(startDate);
       setCompDraft({
@@ -324,7 +331,13 @@ export default function App() {
 
   const saveMemberEdits = async () => {
     const ok = await storageSet("members", editingMembers);
-    if (ok) { setMembers(editingMembers); flash("Member list saved."); }
+    if (ok) {
+      setMembers(editingMembers);
+      flash("Member list saved.");
+    } else {
+      flash("Could not save — check your connection and try again.");
+    }
+    return ok;
   };
 
   const resetAllPoints = async () => {
@@ -355,6 +368,40 @@ export default function App() {
     }
     flash("Could not save — check your connection and try again.");
     return false;
+  };
+
+  const clearOldData = async () => {
+    if (!window.confirm("Clear all tee sheets and competition details older than a month? This can't be undone.")) return;
+    const cutoff = new Date();
+    cutoff.setDate(cutoff.getDate() - 30);
+    const cutoffISO = toISODate(cutoff);
+
+    const latestSheets = (await storageGet("teesheets")) || teesheets;
+    const latestComps = (await storageGet("competitions")) || competitions;
+
+    const keepDate = (d) => d >= cutoffISO;
+    const trimmedSheets = Object.fromEntries(Object.entries(latestSheets).filter(([d]) => keepDate(d)));
+    const trimmedComps = Object.fromEntries(Object.entries(latestComps).filter(([d]) => keepDate(d)));
+
+    const okSheets = await storageSet("teesheets", trimmedSheets);
+    const okComps = await storageSet("competitions", trimmedComps);
+    if (okSheets && okComps) {
+      setTeesheets(trimmedSheets);
+      setCompetitions(trimmedComps);
+      flash("Old tee sheets and competitions cleared.");
+    } else {
+      flash("Could not save — check your connection and try again.");
+    }
+  };
+
+  const saveClubNotice = async () => {
+    const ok = await storageSet("clubNotice", noticeDraft);
+    if (ok) {
+      setClubNotice(noticeDraft);
+      flash("Notice board updated.");
+    } else {
+      flash("Could not save — check your connection and try again.");
+    }
   };
 
   // ---- Printing ----
@@ -428,6 +475,8 @@ export default function App() {
         />
       )}
 
+      {view === "notices" && <NoticesView clubNotice={clubNotice} />}
+
       {view === "members" && <MembersView members={members} />}
 
       {view === "golfer" && (
@@ -471,6 +520,10 @@ export default function App() {
           onPrintTeeSheet={() => printTeeSheetForDate(compDraft.date)}
           onResetAllPoints={resetAllPoints}
           onChangeAdminPassword={changeAdminPassword}
+          onClearOldData={clearOldData}
+          noticeDraft={noticeDraft}
+          setNoticeDraft={setNoticeDraft}
+          saveClubNotice={saveClubNotice}
         />
       )}
 
@@ -494,6 +547,7 @@ function Shell({ children }) {
 function Header({ view, setView, isAdmin }) {
   const tabs = [
     ["tee", "Tee Sheet"],
+    ["notices", "Notices & Results"],
     ["members", "Players & Handicaps"],
     ["golfer", "Golfer of the Year"],
     ["admin", isAdmin ? "Admin" : "Admin sign in"],
@@ -652,6 +706,22 @@ function SlotCell({ date, time, idx, name, onBook, isAdmin, onClear, onOverwrite
   );
 }
 
+function NoticesView({ clubNotice }) {
+  const hasNotice = clubNotice && clubNotice.trim();
+  return (
+    <div className="pane">
+      <h2>Notices &amp; Results</h2>
+      {hasNotice ? (
+        <div className="club-notice standalone">
+          <p>{clubNotice}</p>
+        </div>
+      ) : (
+        <p className="hint">Nothing posted yet — check back soon.</p>
+      )}
+    </div>
+  );
+}
+
 function MembersView({ members }) {
   const sorted = members.slice().sort((a, b) => a.surname.localeCompare(b.surname));
   return (
@@ -750,11 +820,37 @@ function AddMemberForm({ onAdd }) {
   );
 }
 
+function SaveButton({ onSave, label = "Save changes", savedLabel = "✓ Saved!" }) {
+  const [status, setStatus] = useState("idle"); // idle | saving | saved
+
+  const handleClick = async () => {
+    setStatus("saving");
+    const ok = await onSave();
+    if (ok) {
+      setStatus("saved");
+      setTimeout(() => setStatus("idle"), 2000);
+    } else {
+      setStatus("idle");
+    }
+  };
+
+  return (
+    <button
+      className={status === "saved" ? "primary save-btn saved" : "primary save-btn"}
+      onClick={handleClick}
+      disabled={status === "saving"}
+    >
+      {status === "saving" ? "Saving…" : status === "saved" ? savedLabel : label}
+    </button>
+  );
+}
+
 function AdminView({
   adminTab, setAdminTab, compDraft, setCompDraft, changeAdminDate, saveCompetition,
   resetTeeSheet, editingMembers, updateDraftMember, addDraftMember, removeDraftMember,
   saveMemberEdits, startMemberEdits, onSignOut,
-  onPrintHandicaps, onPrintTeeSheet, onResetAllPoints, onChangeAdminPassword,
+  onPrintHandicaps, onPrintTeeSheet, onResetAllPoints, onChangeAdminPassword, onClearOldData,
+  noticeDraft, setNoticeDraft, saveClubNotice,
 }) {
   return (
     <div className="pane">
@@ -812,10 +908,27 @@ function AdminView({
         </div>
       )}
 
+      {adminTab === "setup" && (
+        <div className="admin-setup notice-editor">
+          <label>
+            Notices &amp; Results (shown to everyone on the Tee Sheet page)
+            <textarea
+              rows={5}
+              value={noticeDraft}
+              onChange={(e) => setNoticeDraft(e.target.value)}
+              placeholder="e.g. Saturday's medal results, course closures, club news..."
+            />
+          </label>
+          <div className="admin-actions">
+            <button className="primary" onClick={saveClubNotice}>Save notice board</button>
+          </div>
+        </div>
+      )}
+
       {adminTab === "members" && editingMembers && (
         <div className="admin-members">
           <div className="admin-actions">
-            <button className="primary" onClick={saveMemberEdits}>Save changes</button>
+            <SaveButton onSave={saveMemberEdits} />
             <button onClick={startMemberEdits}>Discard changes</button>
           </div>
 
@@ -904,20 +1017,24 @@ function AdminView({
             </table>
           </div>
           <div className="admin-actions">
-            <button className="primary" onClick={saveMemberEdits}>Save changes</button>
+            <SaveButton onSave={saveMemberEdits} />
             <button onClick={startMemberEdits}>Discard changes</button>
           </div>
         </div>
       )}
 
       {adminTab === "account" && (
-        <AdminAccountTab onResetAllPoints={onResetAllPoints} onChangeAdminPassword={onChangeAdminPassword} />
+        <AdminAccountTab
+          onResetAllPoints={onResetAllPoints}
+          onChangeAdminPassword={onChangeAdminPassword}
+          onClearOldData={onClearOldData}
+        />
       )}
     </div>
   );
 }
 
-function AdminAccountTab({ onResetAllPoints, onChangeAdminPassword }) {
+function AdminAccountTab({ onResetAllPoints, onChangeAdminPassword, onClearOldData }) {
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [error, setError] = useState("");
@@ -974,8 +1091,60 @@ function AdminAccountTab({ onResetAllPoints, onChangeAdminPassword }) {
           <button className="danger" onClick={onResetAllPoints}>Reset all players' points to zero</button>
         </div>
       </div>
+
+      <div className="account-section">
+        <h3>Data cleanup</h3>
+        <p className="hint" style={{ marginTop: 0 }}>
+          Removes tee sheets and competition details for any date more than a month in the past, to keep things tidy.
+        </p>
+        <div className="admin-actions">
+          <button className="danger" onClick={onClearOldData}>Clear tee sheets &amp; competitions older than a month</button>
+        </div>
+      </div>
     </div>
   );
+}
+
+function buildEmailContent(printJob, members, teesheets, competitions) {
+  if (!printJob) return { subject: "", body: "" };
+
+  if (printJob.type === "members") {
+    const sorted = members.slice().sort((a, b) => a.surname.localeCompare(b.surname));
+    const lines = sorted.map((m) => {
+      const handicap = m.handicapIndex === null || m.handicapIndex === undefined ? "—" : Math.round(m.handicapIndex);
+      const index = m.handicapIndex === null || m.handicapIndex === undefined ? "—" : m.handicapIndex.toFixed(1);
+      return `${m.firstname} ${m.surname} — Handicap ${handicap} (${index}), Comp credit ${m.compCredit}, Comps played ${m.compsPlayed}`;
+    });
+    return {
+      subject: "Abbeyview Golf Society — Players & Handicaps",
+      body: `Abbeyview Golf Society — Players & Handicaps\nPrinted ${new Date().toLocaleDateString("en-GB")}\n\n${lines.join("\n")}`,
+    };
+  }
+
+  if (printJob.type === "tee-week") {
+    const sections = printJob.dates.map((date) => {
+      const comp = competitions[date] || { name: "", comments: "" };
+      const sheet = teesheets[date] || emptyTeeSheet();
+      const rows = TEE_TIMES.map((t) => {
+        const names = sheet[t].filter(Boolean).join(", ");
+        return `${t} — ${names || "(no names yet)"}`;
+      });
+      return [
+        comp.name || "Competition to be confirmed",
+        formatPlayDate(date),
+        comp.comments ? comp.comments : null,
+        "",
+        ...rows,
+      ].filter((l) => l !== null).join("\n");
+    });
+    const [monday, wednesday] = printJob.dates;
+    return {
+      subject: `Abbeyview Golf Society — Tee sheets (${formatShortDate(monday)} & ${formatShortDate(wednesday)})`,
+      body: `Abbeyview Golf Society — Weekly Tee Sheet\n\n${sections.join("\n\n")}`,
+    };
+  }
+
+  return { subject: "", body: "" };
 }
 
 function PrintArea({ printJob, members, teesheets, competitions, onClose }) {
@@ -1062,6 +1231,9 @@ function PrintArea({ printJob, members, teesheets, competitions, onClose }) {
 
   if (!content) return null;
 
+  const emailContent = buildEmailContent(printJob, members, teesheets, competitions);
+  const mailtoHref = `mailto:?subject=${encodeURIComponent(emailContent.subject)}&body=${encodeURIComponent(emailContent.body)}`;
+
   return (
     <div className="print-area">
       <div className="print-sheet">
@@ -1069,6 +1241,7 @@ function PrintArea({ printJob, members, teesheets, competitions, onClose }) {
           <span><strong>{previewLabel}</strong> — use your browser/device's Print option if the button below doesn't open one.</span>
           <div className="print-preview-buttons">
             <button type="button" onClick={() => window.print()}>Print now</button>
+            <a className="email-btn" href={mailtoHref}>Email</a>
             <button type="button" onClick={onClose}>Close</button>
           </div>
         </div>
@@ -1136,6 +1309,18 @@ function Styles() {
       }
       .pane { padding: 22px 20px; font-family: system-ui, sans-serif; }
       .pane h2 { font-family: Georgia, serif; color: var(--green-dark); margin-top: 0; }
+      .club-notice {
+        background: #fdf6e3;
+        border: 1px solid var(--gold);
+        border-left: 5px solid var(--gold);
+        padding: 12px 16px;
+        margin-bottom: 18px;
+      }
+      .club-notice h3 {
+        margin: 0 0 6px; font-size: 13px; text-transform: uppercase; letter-spacing: 0.04em;
+        color: var(--green-dark); font-family: system-ui, sans-serif;
+      }
+      .club-notice p { margin: 0; white-space: pre-wrap; color: #55503f; }
       .date-search {
         margin-bottom: 16px;
         font-family: system-ui, sans-serif;
@@ -1275,6 +1460,11 @@ function Styles() {
         background: var(--green); color: #fff; border: none; padding: 8px 14px; cursor: pointer; font-size: 13.5px;
       }
       .admin-actions .primary { background: var(--green-dark); }
+      .save-btn.saved {
+        background: #2f7d3a !important;
+        font-weight: 700;
+      }
+      .save-btn:disabled { opacity: 0.7; cursor: default; }
       .admin-actions .danger { background: #8a3b2f; }
       .admin-actions { display: flex; gap: 10px; margin-top: 14px; flex-wrap: wrap; }
       .error { color: #a33; font-size: 13px; }
@@ -1285,6 +1475,7 @@ function Styles() {
       .admin-setup input, .admin-setup textarea {
         border: 1px solid var(--line); padding: 8px 10px; font-size: 14px; font-family: system-ui, sans-serif; font-weight: normal; color: var(--ink);
       }
+      .notice-editor { margin-top: 8px; padding-top: 20px; border-top: 1px dashed var(--line); }
       .admin-account { display: flex; flex-direction: column; gap: 26px; max-width: 460px; }
       .account-section { border: 1px solid var(--line); background: #fffdf7; padding: 16px 18px; }
       .account-section h3 { margin: 0 0 12px; color: var(--green-dark); font-family: Georgia, serif; }
@@ -1339,6 +1530,11 @@ function Styles() {
         padding: 7px 12px; font-size: 13px; cursor: pointer;
       }
       .print-preview-buttons button:last-child { background: #8a3b2f; }
+      .email-btn {
+        display: inline-flex; align-items: center;
+        background: var(--green); color: #fff; border: none; text-decoration: none;
+        padding: 7px 12px; font-size: 13px; cursor: pointer; font-family: system-ui, sans-serif;
+      }
 
       .print-sheet h1 { margin: 0 0 4px; font-size: 20px; }
       .print-sheet h2 { margin: 0 0 4px; font-size: 16px; }
