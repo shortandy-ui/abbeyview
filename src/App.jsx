@@ -1474,11 +1474,16 @@ function Styles() {
         padding: 12px 16px;
         margin-bottom: 18px;
       }
+      .club-notice.standalone {
+        padding: 28px 32px;
+        min-height: 260px;
+      }
       .club-notice h3 {
         margin: 0 0 6px; font-size: 13px; text-transform: uppercase; letter-spacing: 0.04em;
         color: var(--green-dark); font-family: system-ui, sans-serif;
       }
       .club-notice p { margin: 0; white-space: pre-wrap; color: #55503f; }
+      .club-notice.standalone p { font-size: 17px; line-height: 1.6; }
       .date-search {
         margin-bottom: 16px;
         font-family: system-ui, sans-serif;
