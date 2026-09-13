@@ -957,7 +957,7 @@ function AdminView({
               rows={5}
               value={noticeDraft}
               onChange={(e) => setNoticeDraft(e.target.value)}
-              placeholder="e.g. Saturday's medal results, course closures, club news..."
+              placeholder="e.g. Medal results, course closures, club news..."
             />
           </label>
           <div className="admin-actions">
